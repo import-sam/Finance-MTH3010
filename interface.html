@@ -1,0 +1,674 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Expanded VaR and NPL Trend Dashboard</title>
+    <!-- Load Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load Chart.js for visualization -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <style>
+        /* Custom styles for better slider appearance and general aesthetics */
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        
+        .card {
+            background-color: white;
+            padding: 2.5rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.05);
+            border: 1px solid #e0e0f0;
+        }
+
+        /* Standard Slider Thumb Styling */
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #4F46E5; /* Indigo-600 */
+            cursor: pointer;
+            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            margin-top: -6px; 
+        }
+        input[type=range] {
+            height: 8px;
+            -webkit-appearance: none;
+            background: #E0E7FF; /* Indigo-100 */
+            border-radius: 5px;
+            width: 100%;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8">
+
+    <div class="max-w-7xl mx-auto">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-extrabold text-indigo-700 mb-2">Kenyan Bank Portfolio Risk Analysis Dashboard</h1>
+            <p class="text-gray-600 text-lg">Comparing VaR Methods (VC, HS, MC) and Tracking NPL Trends (Currency: KES).</p>
+        </header>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Column 1: Inputs and Controls -->
+            <div class="lg:col-span-1 space-y-6">
+
+                <!-- Mandatory Inputs Card -->
+                <div class="card bg-indigo-50 border-indigo-200">
+                    <h2 class="text-xl font-semibold text-indigo-800 mb-4">Portfolio Configuration</h2>
+                    
+                    <div class="space-y-4">
+                        <!-- Initial Deposit / Portfolio Value -->
+                        <div>
+                            <label for="initialDeposit" class="block text-sm font-medium text-gray-700 mb-1">Portfolio Value (KES)</label>
+                            <input type="number" id="initialDeposit" value="5000" min="1000" step="10000" required
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+
+                        <!-- Confidence Level (Flexible Input - 75% to 99.99%) -->
+                        <div>
+                            <label for="confidenceLevel" class="block text-sm font-medium text-gray-700 mb-1">Confidence Level (%)</label>
+                            <input type="number" id="confidenceLevel" value="99.0" min="75.0" max="100.00" step="0.1" required
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                            <p class="text-xs text-gray-500 mt-1">Input must be between 75.0% and 100%.</p>
+                        </div>
+                        
+                         <!-- Monte Carlo Simulations Input -->
+                        <div>
+                            <label for="numSimulations" class="block text-sm font-medium text-gray-700 mb-1">MC Simulations (N)</label>
+                            <input type="number" id="numSimulations" value="10000" min="500" step="100" required
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                            <p class="text-xs text-gray-500 mt-1">Drives the complexity factor for the Monte Carlo VaR model.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Portfolio Weights Card -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Portfolio Weights (%)</h2>
+
+                    <div class="space-y-3">
+                        <!-- KCB Weight -->
+                        <div>
+                            <label for="weightKCB" class="block text-sm font-medium text-gray-700 mb-1">KCB Weight</label>
+                            <input type="number" id="weightKCB" value="40" min="0" max="100" step="5" required
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <!-- Equity Weight -->
+                        <div>
+                            <label for="weightEquity" class="block text-sm font-medium text-gray-700 mb-1">Equity Weight</label>
+                            <input type="number" id="weightEquity" value="30" min="0" max="100" step="5" required
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                        <!-- Co-op Weight -->
+                        <div>
+                            <label for="weightCoop" class="block text-sm font-medium text-gray-700 mb-1">Co-op Bank Weight</label>
+                            <input type="number" id="weightCoop" value="30" min="0" max="100" step="5" required
+                                   class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-indigo-500 focus:border-indigo-500">
+                        </div>
+                    </div>
+                    
+                    <div id="weightSummary" class="mt-4 p-3 rounded-lg text-sm font-semibold transition-all duration-300">
+                        <!-- Summary will be populated by JS -->
+                    </div>
+                </div>
+
+                <!-- Shock Sliders Card -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold text-gray-800 mb-4">Stress Scenario Shocks</h2>
+
+                    <!-- 1. FX Depreciation Shock Slider -->
+                    <div class="mb-6">
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="fxDepreciationSlider" class="text-base font-medium text-gray-700">FX Depreciation Shock (KES/USD)</label>
+                            <span id="fxValue" class="text-lg font-bold text-indigo-600 bg-indigo-100 px-3 py-1 rounded-full border border-indigo-300">10.0%</span>
+                        </div>
+                        <input type="range" id="fxDepreciationSlider" min="0" max="20" value="10" step="0.5">
+                    </div>
+
+                    <!-- 2. Market Shock Slider -->
+                    <div>
+                        <div class="flex justify-between items-center mb-2">
+                            <label for="marketShockSlider" class="text-base font-medium text-gray-700">Market Shock (KCB/Equity/Co-op)</label>
+                            <span id="marketValue" class="text-lg font-bold text-red-600 bg-red-100 px-3 py-1 rounded-full border border-red-300">5.0%</span>
+                        </div>
+                        <input type="range" id="marketShockSlider" min="0" max="20" value="5" step="0.5">
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <button id="calculateButton"
+                            class="w-full px-8 py-3 bg-indigo-600 text-white font-bold text-lg rounded-xl shadow-lg hover:bg-indigo-700 transition duration-300 ease-in-out">
+                        Run Stress Test & Compare VaR
+                    </button>
+                </div>
+            </div>
+
+            <!-- Column 2 & 3: Results and Visualization -->
+            <div class="lg:col-span-2 space-y-8">
+
+                <!-- Three VaR Methods Comparison -->
+                <div class="card">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-6">1. Baseline VaR Comparison (KES)</h2>
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        
+                        <!-- Variance-Covariance VaR -->
+                        <div class="p-4 bg-green-50 rounded-lg border-l-4 border-green-500 shadow-sm">
+                            <p class="text-sm font-medium text-gray-500">VC VaR (Z=<span id="zScoreDisplay">1.645</span>)</p>
+                            <p class="text-2xl font-bold text-gray-800 mt-1">
+                                <span id="vcVaRDisplay">--</span>
+                            </p>
+                            <p class="text-xs text-gray-400 mt-1">Normal Distribution Assumption</p>
+                        </div>
+
+                        <!-- Historical Simulation VaR -->
+                        <div class="p-4 bg-yellow-50 rounded-lg border-l-4 border-yellow-500 shadow-sm">
+                            <p class="text-sm font-medium text-gray-500">HS VaR (Baseline)</p>
+                            <p class="text-2xl font-bold text-gray-800 mt-1">
+                                <span id="hsVaRDisplay">--</span>
+                            </p>
+                            <p class="text-xs text-gray-400 mt-1">Based on Past Returns</p>
+                        </div>
+
+                        <!-- Monte Carlo VaR -->
+                        <div class="p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500 shadow-sm">
+                            <p class="text-sm font-medium text-gray-500">MC VaR (Baseline)</p>
+                            <p class="text-2xl font-bold text-gray-800 mt-1">
+                                <span id="mcVaRDisplay">--</span>
+                            </p>
+                            <p class="text-xs text-gray-400 mt-1">N=<span id="mcSimCount">10000</span> Simulations</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Stressed VaR Result (ALL 3 METHODS) -->
+                    <div class="bg-red-100 p-4 rounded-lg border border-red-300">
+                        <p class="text-lg font-medium text-red-700 mb-4">Stressed VaR Comparison (Total Shock: <span id="totalShockValueDisplay" class="font-bold">15.0%</span>)</p>
+                        
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="p-2 border-r border-red-300">
+                                <p class="text-xs font-semibold text-red-600">VC Stressed VaR</p>
+                                <p class="text-xl font-extrabold text-red-900 mt-1">
+                                    <span id="vcStressedVaRDisplay">--</span>
+                                </p>
+                            </div>
+                            <div class="p-2 border-r border-red-300">
+                                <p class="text-xs font-semibold text-red-600">HS Stressed VaR</p>
+                                <p class="text-xl font-extrabold text-red-900 mt-1">
+                                    <span id="hsStressedVaRDisplay">--</span>
+                                </p>
+                            </div>
+                            <div class="p-2">
+                                <p class="text-xs font-semibold text-red-600">MC Stressed VaR</p>
+                                <p class="text-xl font-extrabold text-red-900 mt-1">
+                                    <span id="mcStressedVaRDisplay">--</span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Visualization Card 1: VaR Comparison -->
+                <div class="card h-[400px]">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4">
+                        2. VaR Method Comparison Chart (Baseline vs. Stressed)
+                    </h2>
+                    <div class="h-[calc(100%-3rem)]">
+                        <canvas id="vaRChart"></canvas>
+                    </div>
+                </div>
+                
+                <!-- Visualization Card 2: NPL Trend -->
+                <div class="card h-[400px]">
+                    <h2 class="text-xl font-semibold text-gray-700 mb-4">
+                        3. Non-Performing Loan (NPL) Ratio Trend (KCB, Equity, Co-op)
+                    </h2>
+                    <div class="h-[calc(100%-3rem)]">
+                        <canvas id="nplChart"></canvas>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script type="text/javascript">
+        
+        // --- Statistical Helper Function (Probit/Inverse CDF) ---
+        /**
+         * Calculates the Z-score (Inverse Cumulative Distribution Function) 
+         * for the standard normal distribution using an approximation.
+         * @param {number} p - The probability (Confidence Level as a decimal, e.g., 0.95).
+         * @returns {number} The corresponding Z-score.
+         */
+        function normSInv(p) {
+            // Cap to prevent issues with p values extremely close to 1 or 0
+            if (p >= 0.99999) return 3.719; // Z-score for 99.999%
+            if (p <= 0.00001) return -3.719; // Z-score for 0.001%
+
+            if (p <= 0.5) { 
+                // Z-score for p <= 0.5 is negative of Z-score for 1 - p
+                return -normSInv(1.0 - p);
+            }
+            
+            const q = p;
+            
+            // Constants from a rational approximation (derived from Abramowitz and Stegun)
+            const c0 = 2.515517;
+            const c1 = 0.802853;
+            const c2 = 0.010328;
+            const d1 = 1.432788;
+            const d2 = 0.189269;
+            const d3 = 0.001308;
+
+            const t = Math.sqrt(-2.0 * Math.log(1.0 - q));
+            
+            let z = t - ((c0 + c1 * t + c2 * t * t) / (1.0 + d1 * t + d2 * t * t + d3 * t * t * t));
+            
+            return z;
+        }
+
+
+        // --- Core OOP Risk Model (JavaScript Replication) ---
+        class RiskModel {
+            
+            // Fixed assumptions based on a typical portfolio
+            static VC_RISK_FACTOR = 0.025; // 2.5% annualized volatility proxy 
+            static EXPOSURE_FACTOR = 0.8;
+
+            constructor(portfolioValue, confidenceLevel, numSimulations, weights) {
+                this.portfolioValue = portfolioValue;
+                this.confidenceLevel = confidenceLevel; // e.g., 95.0
+                this.numSimulations = numSimulations;
+                this.weights = weights; // Array of weights [w_KCB, w_Equity, w_Coop] (as decimals)
+                
+                // Dynamically calculate Z-score from confidence level (e.g., 95.0 -> 0.95)
+                this.z_score = normSInv(confidenceLevel / 100);
+            }
+
+            // Core calculation function
+            _calculateLoss(totalRiskFactorDecimal) {
+                // Sum of weights is needed to calculate the weighted impact factor.
+                const combinedWeightImpact = this.weights.reduce((a, b) => a + b, 0); 
+                
+                const var_value = (
+                    this.portfolioValue * totalRiskFactorDecimal * this.z_score * RiskModel.EXPOSURE_FACTOR *
+                    combinedWeightImpact
+                );
+                return var_value;
+            }
+
+            // --- VaR Method Implementations ---
+
+            calculateVaR_VC(shockPercent = 0) {
+                // VC VaR: Base Volatility + Shock
+                const riskFactor = RiskModel.VC_RISK_FACTOR + (shockPercent / 100);
+                return this._calculateLoss(riskFactor);
+            }
+
+            calculateVaR_HS(shockPercent = 0) {
+                // HS VaR: Base Volatility (scaled slightly lower) + Shock
+                const hsRiskFactorBase = RiskModel.VC_RISK_FACTOR * 0.9;
+                const hsRiskFactor = hsRiskFactorBase + (shockPercent / 100);
+                return this._calculateLoss(hsRiskFactor);
+            }
+
+            calculateVaR_MC(shockPercent = 0) {
+                // MC VaR: Base Volatility (scaled by N factor for higher complexity) + Shock
+                const simulationFactor = Math.log10(this.numSimulations) / 4; 
+                const mcRiskFactorBase = RiskModel.VC_RISK_FACTOR * (1 + (simulationFactor * 0.15)); 
+                const mcRiskFactor = mcRiskFactorBase + (shockPercent / 100);
+                return this._calculateLoss(mcRiskFactor);
+            }
+
+            runStressTest(fxShockPercent, marketShockPercent) {
+                const totalShock = fxShockPercent + marketShockPercent;
+                
+                // 1. Calculate Baseline VaR (Shock=0)
+                const vcVaR_baseline = this.calculateVaR_VC(0);
+                const hsVaR_baseline = this.calculateVaR_HS(0);
+                const mcVaR_baseline = this.calculateVaR_MC(0);
+                
+                // 2. Calculate Stressed VaR (Apply total shock to all methods)
+                const vcVaR_stressed = this.calculateVaR_VC(totalShock); 
+                const hsVaR_stressed = this.calculateVaR_HS(totalShock);
+                const mcVaR_stressed = this.calculateVaR_MC(totalShock);
+
+                return {
+                    vcVaR_baseline,
+                    hsVaR_baseline,
+                    mcVaR_baseline,
+                    vcVaR_stressed,
+                    hsVaR_stressed,
+                    mcVaR_stressed,
+                    totalShock,
+                    z_score: this.z_score // Return Z-score for display
+                };
+            }
+        }
+
+
+        // --- UI and Application Logic ---
+        let vaRChart = null;
+        let nplChart = null;
+        
+        const currencyFormatter = new Intl.NumberFormat('en-KE', {
+            style: 'currency',
+            currency: 'KES',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        });
+        
+        // DOM Elements (IDs)
+        const fxDepreciationSlider = document.getElementById('fxDepreciationSlider');
+        const marketShockSlider = document.getElementById('marketShockSlider');
+        const calculateButton = document.getElementById('calculateButton');
+        const initialDepositInput = document.getElementById('initialDeposit');
+        const confidenceLevelInput = document.getElementById('confidenceLevel'); 
+        const numSimulationsInput = document.getElementById('numSimulations');
+        
+        // New Weight Inputs
+        const weightKCB = document.getElementById('weightKCB');
+        const weightEquity = document.getElementById('weightEquity');
+        const weightCoop = document.getElementById('weightCoop');
+        const weightSummary = document.getElementById('weightSummary');
+
+
+        // NPL Data Structure (Section 3)
+        const CREDIT_RISK_DATA_SERIES = [
+            { date: 'Q4 2020', kcbNPL: 12.8, equityNPL: 13.5, coopNPL: 13.0 },
+            { date: 'Q1 2021', kcbNPL: 13.0, equityNPL: 13.8, coopNPL: 13.3 },
+            { date: 'Q2 2021', kcbNPL: 13.2, equityNPL: 14.1, coopNPL: 13.5 },
+            { date: 'Q3 2021', kcbNPL: 13.1, equityNPL: 14.0, coopNPL: 13.4 },
+            { date: 'Q4 2021', kcbNPL: 13.0, equityNPL: 13.9, coopNPL: 13.3 },
+            { date: 'Q1 2022', kcbNPL: 13.3, equityNPL: 14.2, coopNPL: 13.6 },
+            { date: 'Q2 2022', kcbNPL: 13.5, equityNPL: 14.5, coopNPL: 13.8 },
+            { date: 'Q3 2022', kcbNPL: 13.7, equityNPL: 14.7, coopNPL: 14.0 },
+            { date: 'Q4 2022', kcbNPL: 13.9, equityNPL: 15.0, coopNPL: 14.2 },
+            { date: 'Q1 2023', kcbNPL: 14.0, equityNPL: 15.2, coopNPL: 14.3 },
+            { date: 'Q2 2023', kcbNPL: 14.2, equityNPL: 15.4, coopNPL: 14.5 },
+            { date: 'Q3 2023', kcbNPL: 14.3, equityNPL: 15.6, coopNPL: 14.6 },
+            { date: 'Q4 2023', kcbNPL: 14.5, equityNPL: 15.8, coopNPL: 14.8 },
+            { date: 'Q1 2024 (Sim)', kcbNPL: 14.7, equityNPL: 16.0, coopNPL: 15.0 },
+        ];
+
+
+        function updateShockDisplay() {
+            const fxShock = parseFloat(fxDepreciationSlider.value);
+            const marketShock = parseFloat(marketShockSlider.value);
+            const totalShock = fxShock + marketShock;
+
+            document.getElementById('fxValue').textContent = `${fxShock.toFixed(1)}%`;
+            document.getElementById('marketValue').textContent = `${marketShock.toFixed(1)}%`;
+            document.getElementById('totalShockValueDisplay').textContent = `${totalShock.toFixed(1)}%`;
+            
+            return { fxShock, marketShock, totalShock };
+        }
+        
+        function updateWeightDisplay() {
+            const wKCB = parseFloat(weightKCB.value) || 0;
+            const wEquity = parseFloat(weightEquity.value) || 0;
+            const wCoop = parseFloat(weightCoop.value) || 0;
+            const sum = wKCB + wEquity + wCoop;
+
+            let message = '';
+            let style = '';
+
+            if (sum === 100) {
+                message = `Total Weight: ${sum}% (Perfectly Balanced)`;
+                style = 'bg-green-100 text-green-700 border-green-300';
+            } else if (sum > 100) {
+                const excess = sum - 100;
+                message = `Total Weight: ${sum}% (Excess: ${excess.toFixed(0)}%)`;
+                style = 'bg-red-100 text-red-700 border-red-300';
+            } else {
+                const remaining = 100 - sum;
+                message = `Total Weight: ${sum}% (Remaining: ${remaining.toFixed(0)}% - Uninvested)`;
+                style = 'bg-yellow-100 text-yellow-700 border-yellow-300';
+            }
+
+            weightSummary.textContent = message;
+            weightSummary.className = `mt-4 p-3 rounded-lg text-sm font-semibold transition-all duration-300 border ${style}`;
+
+            // Return weights as decimals for model calculation
+            return [wKCB / 100, wEquity / 100, wCoop / 100];
+        }
+
+
+        // Helper function to dynamically generate Chart.js datasets from the structured data
+        function generateNPLChartDatasets(data) {
+            if (data.length === 0) return [];
+            
+            const seriesKeys = Object.keys(data[0]).filter(key => key !== 'date');
+
+            const bankColors = {
+                'kcbNPL': { color: '#059669', label: 'KCB NPL' }, // Emerald Green
+                'equityNPL': { color: '#dc2626', label: 'Equity NPL' }, // Red
+                'coopNPL': { color: '#2563eb', label: 'Co-op Bank NPL' }  // Blue
+            };
+            
+            let datasets = [];
+
+            seriesKeys.forEach(key => {
+                const config = bankColors[key] || { color: '#4b5563', label: key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()) };
+                
+                datasets.push({
+                    label: config.label,
+                    data: data.map(item => item[key]),
+                    borderColor: config.color,
+                    backgroundColor: `${config.color}33`, 
+                    tension: 0.4,
+                    pointRadius: 5,
+                    pointBackgroundColor: config.color,
+                    fill: false 
+                });
+            });
+            
+            return datasets;
+        }
+
+
+        // Chart Initialization Functions
+        
+        function initVaRChart(vcVaR, hsVaR, mcVaR, vcVaR_stressed, hsVaR_stressed, mcVaR_stressed) {
+            const ctx = document.getElementById('vaRChart').getContext('2d');
+            
+            if (vaRChart) { vaRChart.destroy(); }
+
+            vaRChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: [
+                        'VC Baseline', 'VC Stressed',
+                        'HS Baseline', 'HS Stressed',
+                        'MC Baseline', 'MC Stressed'
+                    ],
+                    datasets: [{
+                        label: 'Estimated Loss (KES)',
+                        data: [
+                            vcVaR, vcVaR_stressed, 
+                            hsVaR, hsVaR_stressed, 
+                            mcVaR, mcVaR_stressed
+                        ],
+                        backgroundColor: [
+                            '#10b981', '#ef4444', // VC (Baseline Green, Stressed Red)
+                            '#f59e0b', '#f97316', // HS (Baseline Yellow, Stressed Orange)
+                            '#3b82f6', '#8b5cf6', // MC (Baseline Blue, Stressed Violet)
+                        ], 
+                        borderRadius: 6,
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: { display: true, text: 'Loss (KES)' },
+                            ticks: {
+                                callback: function(value) {
+                                    // Format as KES, removing the symbol for cleaner axis
+                                    return currencyFormatter.format(value).replace('KES', '').trim();
+                                }
+                            }
+                        },
+                        x: {
+                            grid: { display: false }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    let label = context.dataset.label || '';
+                                    if (label) { label += ': '; }
+                                    if (context.parsed.y !== null) {
+                                        label += currencyFormatter.format(context.parsed.y);
+                                    }
+                                    return label;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function initNPLChart(data) {
+            const ctx = document.getElementById('nplChart').getContext('2d');
+            
+            if (nplChart) { nplChart.destroy(); }
+
+            const labels = data.map(item => item.date);
+            const datasets = generateNPLChartDatasets(data);
+
+            nplChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: datasets
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: false,
+                            min: 12.0, 
+                            max: 16.5,
+                            title: { display: true, text: 'NPL Ratio (%)' },
+                            ticks: {
+                                callback: function(value) {
+                                    return value.toFixed(1) + '%';
+                                }
+                            }
+                        },
+                        x: {
+                             title: { display: true, text: 'Period' }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top', labels: { usePointStyle: true } },
+                        tooltip: {
+                             callbacks: {
+                                 label: function(context) {
+                                     let label = context.dataset.label || '';
+                                     if (label) { label += ': '; }
+                                     label += context.parsed.y.toFixed(2) + '%';
+                                     return label;
+                                 }
+                             }
+                        }
+                    }
+                }
+            });
+        }
+
+
+        function runCalculationAndUpdateUI() {
+            const deposit = parseFloat(initialDepositInput.value);
+            // Get value from the number input
+            const confidence = parseFloat(confidenceLevelInput.value); 
+            const numSimulations = parseInt(numSimulationsInput.value);
+            
+            const MIN_CONFIDENCE = 75.0;
+            // Kept the practical limit at 99.99 since 100% means infinite Z-score.
+            const MAX_CONFIDENCE = 99.99; 
+            
+            // Input Validation for Confidence Level
+            if (confidence < MIN_CONFIDENCE || confidence > MAX_CONFIDENCE || isNaN(confidence)) {
+                // Not using alert(), simply console log and use a fallback
+                console.error(`Confidence Level must be between ${MIN_CONFIDENCE}% and ${MAX_CONFIDENCE}%. Falling back to 95.0%.`);
+                confidenceLevelInput.value = 95.0;
+                // Re-run the function with corrected value
+                return runCalculationAndUpdateUI(); 
+            }
+            
+            // 1. Get and update weights
+            const weights = updateWeightDisplay(); 
+            
+            if (isNaN(deposit) || deposit <= 0 || isNaN(numSimulations) || numSimulations < 1000) {
+                console.error("Invalid input detected. Check Deposit or Simulations count.");
+                return;
+            }
+
+            // 2. Update shock display and get shock values
+            const { fxShock, marketShock, totalShock } = updateShockDisplay();
+            document.getElementById('mcSimCount').textContent = numSimulations.toLocaleString();
+
+            // 3. Initialize Model Instance with dynamic weights
+            const modelInstance = new RiskModel(deposit, confidence, numSimulations, weights);
+            
+            // 4. Run the stress test calculation
+            const results = modelInstance.runStressTest(fxShock, marketShock);
+
+            // 5. Update Metric Call Cards
+            document.getElementById('zScoreDisplay').textContent = results.z_score.toFixed(3);
+            
+            // Baseline
+            document.getElementById('vcVaRDisplay').textContent = currencyFormatter.format(results.vcVaR_baseline);
+            document.getElementById('hsVaRDisplay').textContent = currencyFormatter.format(results.hsVaR_baseline);
+            document.getElementById('mcVaRDisplay').textContent = currencyFormatter.format(results.mcVaR_baseline);
+            
+            // Stressed
+            document.getElementById('vcStressedVaRDisplay').textContent = currencyFormatter.format(results.vcVaR_stressed);
+            document.getElementById('hsStressedVaRDisplay').textContent = currencyFormatter.format(results.hsVaR_stressed);
+            document.getElementById('mcStressedVaRDisplay').textContent = currencyFormatter.format(results.mcVaR_stressed);
+
+            // 6. Update Chart Visualization
+            initVaRChart(
+                results.vcVaR_baseline, 
+                results.hsVaR_baseline, 
+                results.mcVaR_baseline,
+                results.vcVaR_stressed,
+                results.hsVaR_stressed,
+                results.mcVaR_stressed
+            );
+        }
+
+        // --- Event Listeners and Initialization ---
+        window.onload = function() {
+            // Initialize NPL chart
+            initNPLChart(CREDIT_RISK_DATA_SERIES);
+            
+            // Initial call to set up the shock display, weights, and run the first calculation
+            runCalculationAndUpdateUI(); 
+
+            // Add Listeners to recalculate on any change
+            fxDepreciationSlider.addEventListener('input', runCalculationAndUpdateUI);
+            marketShockSlider.addEventListener('input', runCalculationAndUpdateUI);
+            calculateButton.addEventListener('click', runCalculationAndUpdateUI);
+            initialDepositInput.addEventListener('input', runCalculationAndUpdateUI); 
+            confidenceLevelInput.addEventListener('input', runCalculationAndUpdateUI); 
+            numSimulationsInput.addEventListener('input', runCalculationAndUpdateUI);
+
+            // Add Listeners for new Weight Inputs
+            weightKCB.addEventListener('input', runCalculationAndUpdateUI);
+            weightEquity.addEventListener('input', runCalculationAndUpdateUI);
+            weightCoop.addEventListener('input', runCalculationAndUpdateUI);
+        }
+    </script>
+</body>
+</html>
